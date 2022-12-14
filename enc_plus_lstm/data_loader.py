@@ -9,6 +9,8 @@ import numpy as np
 from tqdm import tqdm
 import random
 import json
+from torchvision import transforms
+
 
 def get_loader(transform,
                mode='train',
@@ -37,7 +39,7 @@ def get_loader(transform,
       cocoapi_loc: The location of the folder containing the COCO API: https://github.com/cocodataset/cocoapi
     """
     
-    assert mode in ['train', 'test'], "mode must be one of 'train' or 'test'."
+    assert mode in ['train', 'test', 'eval'], "mode must be one of 'train' or 'test'."
     if vocab_from_file==False: assert mode=='train', "To generate vocab from captions file, must be in training mode (mode='train')."
 
     # Based on mode (train, val, test), obtain img_folder and annotations_file.
@@ -45,12 +47,13 @@ def get_loader(transform,
         if vocab_from_file==True: assert os.path.exists(vocab_file), "vocab_file does not exist.  Change vocab_from_file to False to create vocab_file."
         img_folder = cocoapi_loc + 'cocoapi/train2014/'
         annotations_file = cocoapi_loc + 'cocoapi/annotations/captions_train2014.json'
-    if mode == 'test':
+
+    if mode == 'test' or 'eval':
         assert batch_size==1, "Please change batch_size to 1 if testing your model."
         assert os.path.exists(vocab_file), "Must first generate vocab.pkl from training data."
         assert vocab_from_file==True, "Change vocab_from_file to True."
-        img_folder = os.path.join(cocoapi_loc, 'cocoapi/test2014/')
-        annotations_file = os.path.join(cocoapi_loc, 'cocoapi/annotations/image_info_test2014.json')
+        img_folder = os.path.join(cocoapi_loc, 'cocoapi/val2017/')
+        annotations_file = os.path.join(cocoapi_loc, 'cocoapi/annotations/annotations/captions_val2017.json')
 
     # COCO caption dataset.
     dataset = CoCoDataset(transform=transform,
@@ -100,6 +103,18 @@ class CoCoDataset(data.Dataset):
             print('Obtaining caption lengths...')
             all_tokens = [nltk.tokenize.word_tokenize(str(self.coco.anns[self.ids[index]]['caption']).lower()) for index in tqdm(np.arange(len(self.ids)))]
             self.caption_lengths = [len(token) for token in all_tokens]
+
+        elif self.mode == 'eval':
+            eval_info = json.loads(open(annotations_file).read())
+            self.img_id_to_captions = {}
+            self.img_id_to_img = {}
+            for img_dict in eval_info['annotations']:
+                img_id = img_dict['image_id']
+                self.img_id_to_captions.setdefault(img_id,[])
+                self.img_id_to_captions[img_id].append(img_dict['caption'])
+            for img_dict in eval_info['images']:
+                self.img_id_to_img[img_dict['id']] = img_dict['file_name']
+            self.ids = list(self.img_id_to_img.keys())
         else:
             test_info = json.loads(open(annotations_file).read())
             self.paths = [item['file_name'] for item in test_info['images']]
@@ -128,7 +143,7 @@ class CoCoDataset(data.Dataset):
             return image, caption
 
         # obtain image if in test mode
-        else:
+        elif self.mode == 'test':
             path = self.paths[index]
 
             # Convert image to tensor and pre-process using transform
@@ -139,6 +154,19 @@ class CoCoDataset(data.Dataset):
             # return original image and pre-processed image tensor
             return orig_image, image
 
+        elif self.mode == 'eval':
+            ann_id = self.ids[index]
+            captions = self.img_id_to_captions[ann_id]
+            img_p = self.img_id_to_img[ann_id]
+
+            # Convert image to tensor and pre-process using transform
+            image = Image.open(self.img_folder + img_p).convert('RGB')
+            image = self.transform(image)
+
+            # return pre-processed image and caption tensors
+            return image, captions
+
+
     def get_train_indices(self):
         sel_length = np.random.choice(self.caption_lengths)
         all_indices = np.where([self.caption_lengths[i] == sel_length for i in np.arange(len(self.caption_lengths))])[0]
@@ -146,7 +174,30 @@ class CoCoDataset(data.Dataset):
         return indices
 
     def __len__(self):
-        if self.mode == 'train':
+        if self.mode == 'train' or self.mode == 'eval':
             return len(self.ids)
         else:
             return len(self.paths)
+
+
+if __name__ == '__main__':
+    transform_train = transforms.Compose([
+        transforms.Resize((256, 256)),  # smaller edge of image resized to 256
+        transforms.ToTensor(),  # convert the PIL Image to a tensor
+        transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
+                             (0.229, 0.224, 0.225))])
+    batch_size = 1
+    vocab_threshold = 6  # minimum word count threshold
+    vocab_from_file = True
+    x = get_loader(transform=transform_train,
+                   mode='eval',
+                   batch_size=batch_size,
+                   vocab_threshold=vocab_threshold,
+                   vocab_from_file=vocab_from_file,
+                   cocoapi_loc='C:/Users/vinhl/Documents/School/68610/img_captioning/opt/')
+    images, captions = next(iter(x))
+
+    # annotations_file = 'C:/Users/vinhl/Documents/School/68610/img_captioning/opt/cocoapi/combined_dataset/captions.json'
+    # data = json.loads(open(annotations_file).read())
+    # print(data['images'][0:5])
+    # print(data['annotations'][0:5])
