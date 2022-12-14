@@ -25,7 +25,7 @@ def main(model_path=False):
     vocab_from_file = True    # if True, load existing vocab file
     embed_size = 512           # dimensionality of image and word embeddings
     hidden_size = 512          # number of features in hidden state of the RNN decoder
-    num_epochs = 1000            # number of training epochs
+    num_epochs = 2500            # number of training epochs
 
     transform = transforms.Compose([
         transforms.Resize((256,256)),                          # smaller edge of image resized to 256
@@ -120,13 +120,22 @@ def main(model_path=False):
 
 
 if __name__ == '__main__':
+    torch.manual_seed(1)
     bleu , cider, perplexity = main('mscoco_model.tar')
     print('bleuscore:', np.mean(bleu))
     print('ciderscore:', np.mean(cider))
     print('perplexity:', np.mean(perplexity))
     '''
-    bleuscore: 0.4302091876986542
-ciderscore: 0.6868682982377469'''
+    combined_model
+bleuscore: 0.4412997037696181
+ciderscore: 0.6988505372876694
+perplexity: 258.91470270219185
+
+
+bleuscore: 0.5041668932233264
+ciderscore: 0.8360350388681347
+perplexity: 117.97131116418531
+'''
 
 
 

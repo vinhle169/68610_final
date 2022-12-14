@@ -52,8 +52,8 @@ def get_loader(transform,
         assert batch_size==1, "Please change batch_size to 1 if testing your model."
         assert os.path.exists(vocab_file), "Must first generate vocab.pkl from training data."
         assert vocab_from_file==True, "Change vocab_from_file to True."
-        img_folder = os.path.join(cocoapi_loc, 'cocoapi/val2017/')
-        annotations_file = os.path.join(cocoapi_loc, 'cocoapi/annotations/annotations/captions_val2017.json')
+        img_folder = os.path.join(cocoapi_loc, 'cocoapi/val2014/')
+        annotations_file = os.path.join(cocoapi_loc, 'cocoapi/annotations/captions_val2014.json')
 
     # COCO caption dataset.
     dataset = CoCoDataset(transform=transform,
