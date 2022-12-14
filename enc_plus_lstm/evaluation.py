@@ -20,6 +20,14 @@ import nltk
 
 
 def main(model_path=False):
+    '''
+    Does evaluation for cnn + lstm model
+    TBH it is ok if it is hard to do perplexity and generate a sentence
+    :param model_path:
+    :return:
+    '''
+
+    ### LOADING IN CNN + LSTM MODEL and the corresponding data loader/ Change code until next block if loading in diff model
     batch_size = 1       # batch size
     vocab_threshold = 6        # minimum word count threshold
     vocab_from_file = True    # if True, load existing vocab file
@@ -40,18 +48,6 @@ def main(model_path=False):
                              vocab_threshold=vocab_threshold,
                              vocab_from_file=vocab_from_file,
                              cocoapi_loc='C:/Users/vinhl/Documents/School/68610/img_captioning/opt/')
-
-    def clean_sentence(output):
-        sentence = ""
-        for i in output:
-            word = data_loader.dataset.vocab.idx2word[i]
-            if (word == data_loader.dataset.vocab.start_word):
-                continue
-            elif (word == data_loader.dataset.vocab.end_word):
-                break
-            else:
-                sentence = sentence + " " + word
-        return sentence
 
 
     # The size of the vocabulary.
@@ -76,6 +72,20 @@ def main(model_path=False):
     decoder.to(device)
     criterion = nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else nn.CrossEntropyLoss()
 
+    # function to help load the sentence as a string (not necessary depending on process)
+    def clean_sentence(output):
+        sentence = ""
+        for i in output:
+            word = data_loader.dataset.vocab.idx2word[i]
+            if word == data_loader.dataset.vocab.start_word:
+                continue
+            elif word == data_loader.dataset.vocab.end_word:
+                break
+            else:
+                sentence = sentence + " " + word
+        return sentence
+
+    # function to convert caption to tensor (not necessary depending on process)
     def caption_to_tensor(caption):
         tokens = nltk.tokenize.word_tokenize(str(caption).lower())
         caption = []
@@ -84,6 +94,7 @@ def main(model_path=False):
         caption.append(data_loader.dataset.vocab(data_loader.dataset.vocab.end_word))
         return torch.Tensor([caption]).long()
 
+    # quick function to wrap generating a caption given an image
     def generate(img, cap):
         perp = []
         img = img.to(device)
@@ -107,7 +118,16 @@ def main(model_path=False):
         captions = [i[0] for i in captions]
         captions_bleu = [i.split() for i in captions]
         candidate_bleu = candidate.split()
+        # Bleu score takes in captions and candidate
+        # captions_bleu has to be the set of captions that r ground truth for a given image, it is also split by words
+        # ex: [['dog','is','walking'],['animal','is','moving'],['there','is','a','dog']]
+        # candidate_bleu is the predicted sentence we are computing the score for
+        # ex: [['the','dog','is','moving']]
+        # just use the same weights and smoothing function
         bleu_score = sentence_bleu(captions_bleu, candidate_bleu, weights=(.95, .05, 0, 0), smoothing_function = SmoothingFunction().method3)
+        # for cider score you need to input dictionaries, you dont need to split sentences for this
+        # for the hypo_for_image, its just {1:['the dog is moving']}
+        # for ref_for_image, its just {1:['dog is walking','animal is moving', 'there is a dog']}
         hypo_for_image = {1: [candidate]}
         ref_for_image = {1: captions}
         c = Cider()
